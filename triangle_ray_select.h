@@ -160,9 +160,13 @@ class TriangleRaySelect : public RefCounted
 
 	static void vk_extensions_request_atomic();
 
+	static RID get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(RID mesh_storage_instance_id);
+
 	static RID get_mesh_storage_instance(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::MeshInstance *get_mesh_vertex_data(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::MeshInstance *get_mesh_vertex_data(RID mesh_storage_instance_id);
+	static mesh_storage_t::Mesh *get_mesh_vertex_data(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::Mesh *get_mesh_vertex_data(RID mesh_storage_instance_id);
 
 	static void _bind_methods();
 
@@ -177,15 +181,21 @@ class TriangleRaySelect : public RefCounted
 
 	SurfaceData create_mesh_instance_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
 	                                              mesh_storage_t::MeshInstance *mesh_instance_data);
+	SurfaceData create_mesh_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
+	                                     mesh_storage_t::Mesh *mesh_data);
+
 
 	PackedVector3Array get_triangle_vertices(const Ref<MeshSurfaceIndex> &mesh_surface_index);
 
 	private:
 	TriangleRaySelectShader _triangle_ray_select_shader;
 
-	std::map<const mesh_storage_t::MeshInstance::Surface *, SurfaceData> _surface_uniform_set;
+	std::map<const mesh_storage_t::MeshInstance::Surface *, SurfaceData> _instance_surface_uniform_set;
+	std::map<const mesh_storage_t::Mesh::Surface *, SurfaceData> _mesh_surface_uniform_set;
+
 	RID _selected_vertex_buffer;
 	RID _selected_vertex_uniform_set;
 
 	static RID generate_index_array_storage_buffer(const Mesh &mesh, int surface_id);
+	static std::pair<RID, uint8_t> generate_vertex_array_storage_buffer(const Mesh &mesh, int surface_id);
 };

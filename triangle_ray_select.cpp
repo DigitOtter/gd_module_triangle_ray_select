@@ -106,12 +106,20 @@ TriangleRaySelect::~TriangleRaySelect()
 		this->_triangle_ray_select_shader.version        = RID();
 	}
 
-	for(auto &surface_rid: this->_surface_uniform_set)
+	for(auto &surface_rid: this->_instance_surface_uniform_set)
 	{
 		prd->free(surface_rid.second.SurfaceUniformSet);
 		prd->free(surface_rid.second.IndexStorageBuffer);
 	}
-	this->_surface_uniform_set.clear();
+	this->_instance_surface_uniform_set.clear();
+
+	for(auto &surface_rid: this->_mesh_surface_uniform_set)
+	{
+		prd->free(surface_rid.second.SurfaceUniformSet);
+		prd->free(surface_rid.second.IndexStorageBuffer);
+		prd->free(surface_rid.second.VertexStorageBuffer);
+	}
+	this->_mesh_surface_uniform_set.clear();
 
 	if(this->_selected_vertex_uniform_set.is_valid())
 	{
@@ -131,7 +139,7 @@ void TriangleRaySelect::vk_extensions_request_atomic()
 	::vk_extensions_request_atomic();
 }
 
-RID TriangleRaySelect::get_mesh_storage_instance(MeshInstance3D *mesh_instance)
+RID TriangleRaySelect::get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance)
 {
 	// For future reference:
 	// The MeshInstance3D RID is owned by RenderingMethod (RSG::scene). Currently, RendererSceneCull is the derived
@@ -158,15 +166,17 @@ RID TriangleRaySelect::get_mesh_storage_instance(MeshInstance3D *mesh_instance)
 	return dynamic_cast<RenderGeometryInstanceBase *>(geom->geometry_instance)->mesh_instance;
 }
 
-TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_vertex_data(MeshInstance3D *mesh_instance)
+TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
+	MeshInstance3D *mesh_instance)
 {
-	RID mesh_storage_instance_id = get_mesh_storage_instance(mesh_instance);
+	RID mesh_storage_instance_id = get_mesh_instance_storage_instance(mesh_instance);
 	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
 
-	return get_mesh_vertex_data(mesh_storage_instance_id);
+	return get_mesh_instance_vertex_data(mesh_storage_instance_id);
 }
 
-TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_vertex_data(RID mesh_storage_instance_id)
+TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
+	RID mesh_storage_instance_id)
 {
 	// Check that mesh_id is really owned by mesh_storage
 	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
@@ -174,6 +184,30 @@ TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_ver
 	assert(mesh_instance_owner.owns(mesh_storage_instance_id));
 
 	return mesh_instance_owner.get_or_null(mesh_storage_instance_id);
+}
+
+RID TriangleRaySelect::get_mesh_storage_instance(MeshInstance3D *mesh_instance)
+{
+	assert(mesh_storage_t::get_singleton()->mesh_owner.owns(mesh_instance->get_mesh()->get_rid()));
+	return mesh_instance->get_mesh()->get_rid();
+}
+
+TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(MeshInstance3D *mesh_instance)
+{
+	RID mesh_storage_instance_id = get_mesh_storage_instance(mesh_instance);
+	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
+
+	return get_mesh_vertex_data(mesh_storage_instance_id);
+}
+
+TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(RID mesh_storage_instance_id)
+{
+	// Check that mesh_id is really owned by mesh_storage
+	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
+	auto &mesh_owner             = mesh_storage.mesh_owner;
+	assert(mesh_owner.owns(mesh_storage_instance_id));
+
+	return mesh_owner.get_or_null(mesh_storage_instance_id);
 }
 
 void TriangleRaySelect::_bind_methods()
@@ -205,7 +239,10 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_meshes(const Array
 		                 "Array contains an item that is not a MeshInstance3D");
 
 		MeshInstance3D *mesh_instance = static_cast<MeshInstance3D *>(o);
-		Ref<MeshSurfaceIndex> cur_res = this->select_triangle_from_mesh(mesh_instance, ray_origin, ray_normal);
+		const Transform3D &global_tf  = mesh_instance->get_global_transform();
+
+		Ref<MeshSurfaceIndex> cur_res = this->select_triangle_from_mesh(mesh_instance, global_tf.xform_inv(ray_origin),
+		                                                                global_tf.basis.xform_inv(ray_normal));
 
 		if(cur_res->ray_origin_dist < ret->ray_origin_dist)
 		{
@@ -226,18 +263,19 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3
 Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
                                                                    const Vector3 &ray_origin, const Vector3 &ray_normal)
 {
-	if(!mesh_instance)
-	{
-		return Ref(new MeshSurfaceIndex());
-	}
+	ERR_FAIL_COND_V(mesh_instance == nullptr, Ref(new MeshSurfaceIndex()));
 
-	RID mesh_storage_instance_id                            = get_mesh_storage_instance(mesh_instance);
-	mesh_storage_t::MeshInstance *const pmesh_instance_data = get_mesh_vertex_data(mesh_storage_instance_id);
+	RID mesh_rid = get_mesh_storage_instance(mesh_instance);
+	ERR_FAIL_COND_V(mesh_rid.is_null(), Ref(new MeshSurfaceIndex()));
+
+	// RID mesh_storage_instance_id                            = get_mesh_instance_storage_instance(mesh_instance);
+	// mesh_storage_t::MeshInstance *const pmesh_instance_data =
+	// get_mesh_instance_vertex_data(mesh_storage_instance_id);
 
 	// Apply skeleton and blendshape deforms
-	mesh_storage_t *pmesh_storage = mesh_storage_t::get_singleton();
-	pmesh_storage->mesh_instance_check_for_update(mesh_storage_instance_id);
-	pmesh_storage->update_mesh_instances();
+	// mesh_storage_t *pmesh_storage = mesh_storage_t::get_singleton();
+	// pmesh_storage->mesh_instance_check_for_update(mesh_storage_instance_id);
+	// pmesh_storage->update_mesh_instances();
 
 	// Compute shader defaults
 	constexpr TriangleRaySelectShader::SelectedVertex default_selected_vertex{
@@ -259,25 +297,48 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3
 	params.RayNormal[1] = ray_normal[1];
 	params.RayNormal[2] = ray_normal[2];
 
-	RenderingDevice *const prd = RD::get_singleton();
+	RenderingDevice *const prd   = RD::get_singleton();
+	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
 
-	const size_t surface_count = pmesh_instance_data->surfaces.size();
+	const bool needs_instance =
+		mesh_storage.mesh_needs_instance(mesh_rid, !mesh_instance->get_skeleton_path().is_empty());
+	const size_t surface_count = mesh_instance->get_surface_override_material_count();
 	for(size_t i = 0; i < surface_count; ++i)
 	{
 		// Get or create surface uniform set containing index and vertex buffer
 		const SurfaceData *psurface_data;
-		if(auto uniform_it = this->_surface_uniform_set.find(pmesh_instance_data->surfaces.ptr() + i);
-		   uniform_it != this->_surface_uniform_set.end())
+		if(needs_instance)
 		{
-			psurface_data = &uniform_it->second;
+			mesh_storage_t::MeshInstance *pmesh_instance_data = get_mesh_instance_vertex_data(mesh_instance);
+			if(auto uniform_it = this->_instance_surface_uniform_set.find(pmesh_instance_data->surfaces.ptr() + i);
+			   uniform_it != this->_instance_surface_uniform_set.end())
+			{
+				psurface_data = &uniform_it->second;
+			}
+			else
+			{
+				SurfaceData new_surface_data =
+					this->create_mesh_instance_surface_data(*mesh_instance, i, pmesh_instance_data);
+				psurface_data = &this->_instance_surface_uniform_set
+				                     .emplace(pmesh_instance_data->surfaces.ptr() + i, new_surface_data)
+				                     .first->second;
+			}
 		}
 		else
 		{
-			SurfaceData new_surface_data =
-				this->create_mesh_instance_surface_data(*mesh_instance, i, pmesh_instance_data);
-			psurface_data =
-				&this->_surface_uniform_set.emplace(pmesh_instance_data->surfaces.ptr() + i, new_surface_data)
-					 .first->second;
+			mesh_storage_t::Mesh *pmesh_instance_data = get_mesh_vertex_data(mesh_instance);
+			if(auto uniform_it = this->_mesh_surface_uniform_set.find(pmesh_instance_data->surfaces[i]);
+			   uniform_it != this->_mesh_surface_uniform_set.end())
+			{
+				psurface_data = &uniform_it->second;
+			}
+			else
+			{
+				SurfaceData new_surface_data = this->create_mesh_surface_data(*mesh_instance, i, pmesh_instance_data);
+				psurface_data =
+					&this->_mesh_surface_uniform_set.emplace(pmesh_instance_data->surfaces[i], new_surface_data)
+						 .first->second;
+			}
 		}
 
 		// Reset selected_vertex_buffer to default
@@ -341,7 +402,9 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 
 	SurfaceData surface_data;
 	surface_data.IndexStorageBuffer  = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+
 	surface_data.VertexStorageBuffer = psurface->vertex_buffer;
+	surface_data.VertexStride        = (pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4;
 
 	Vector<RD::Uniform> uniforms;
 	{
@@ -366,7 +429,46 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 	       pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLE_STRIP);
 	surface_data.IndexStride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
 
-	surface_data.VertexStride = (pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4;
+	surface_data.SurfaceUniformSet =
+		RD::get_singleton()->uniform_set_create(uniforms, this->_triangle_ray_select_shader.shader_version, 0);
+
+	return surface_data;
+}
+
+TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const MeshInstance3D &mesh_instance,
+                                                                           size_t surface_id,
+                                                                           mesh_storage_t::Mesh *mesh_data)
+{
+	assert(surface_id < mesh_data->surface_count);
+	const mesh_storage_t::Mesh::Surface *const pmesh_surface = mesh_data->surfaces[surface_id];
+
+	SurfaceData surface_data;
+	surface_data.IndexStorageBuffer = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+	std::tie(surface_data.VertexStorageBuffer, surface_data.VertexStride) =
+		generate_vertex_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+
+	Vector<RD::Uniform> uniforms;
+	{
+		RD::Uniform u;
+		u.binding      = 0;
+		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.append_id(surface_data.IndexStorageBuffer);
+		uniforms.push_back(u);
+	}
+
+	{
+		RD::Uniform u;
+		u.binding      = 1;
+		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
+		u.append_id(surface_data.VertexStorageBuffer);
+		uniforms.push_back(u);
+	}
+
+	surface_data.IndexCount = pmesh_surface->index_count;
+
+	assert(pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ||
+	       pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLE_STRIP);
+	surface_data.IndexStride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
 
 	surface_data.SurfaceUniformSet =
 		RD::get_singleton()->uniform_set_create(uniforms, this->_triangle_ray_select_shader.shader_version, 0);
@@ -379,15 +481,35 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfac
 	ERR_FAIL_COND_V(mesh_surface_index.is_null(), PackedVector3Array());
 	ERR_FAIL_COND_V(mesh_surface_index->index_id == MeshSurfaceIndex::INVALID_ID, PackedVector3Array());
 
-	const mesh_storage_t::MeshInstance *pmesh_data =
-		TriangleRaySelect::get_mesh_vertex_data(mesh_surface_index->mesh_instance);
-	ERR_FAIL_COND_V(!pmesh_data, PackedVector3Array());
+	const SurfaceData *psurf_data;
+	if(mesh_storage_t::get_singleton()->mesh_needs_instance(
+		   mesh_surface_index->mesh_instance->get_mesh()->get_rid(),
+		   !mesh_surface_index->mesh_instance->get_skeleton_path().is_empty()))
+	{
+		const mesh_storage_t::MeshInstance *pmesh_data =
+			TriangleRaySelect::get_mesh_instance_vertex_data(mesh_surface_index->mesh_instance);
+		ERR_FAIL_COND_V(!pmesh_data, PackedVector3Array());
 
-	const mesh_storage_t::MeshInstance::Surface *psurface = &pmesh_data->surfaces[mesh_surface_index->surface_id];
-	ERR_FAIL_COND_V(psurface == nullptr, PackedVector3Array());
+		const mesh_storage_t::MeshInstance::Surface *psurface = &pmesh_data->surfaces[mesh_surface_index->surface_id];
 
-	const auto surf_dat_it = this->_surface_uniform_set.find(psurface);
-	ERR_FAIL_COND_V(surf_dat_it == this->_surface_uniform_set.end(), PackedVector3Array());
+		const auto surf_dat_it = this->_instance_surface_uniform_set.find(psurface);
+		ERR_FAIL_COND_V(surf_dat_it == this->_instance_surface_uniform_set.end(), PackedVector3Array());
+
+		psurf_data = &surf_dat_it->second;
+	}
+	else
+	{
+		const mesh_storage_t::Mesh *pmesh_data =
+			TriangleRaySelect::get_mesh_vertex_data(mesh_surface_index->mesh_instance);
+		ERR_FAIL_COND_V(!pmesh_data, PackedVector3Array());
+
+		const mesh_storage_t::Mesh::Surface *psurface = pmesh_data->surfaces[mesh_surface_index->surface_id];
+
+		const auto surf_dat_it = this->_mesh_surface_uniform_set.find(psurface);
+		ERR_FAIL_COND_V(surf_dat_it == this->_mesh_surface_uniform_set.end(), PackedVector3Array());
+
+		psurf_data = &surf_dat_it->second;
+	}
 
 	RD *const prd = RD::get_singleton();
 
@@ -397,8 +519,8 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfac
 	{
 		const int32_t vector_index = mesh_surface_index->vertex_ids[i];
 		const Vector<uint8_t> vector_buffer =
-			prd->buffer_get_data(surf_dat_it->second.VertexStorageBuffer,
-		                         vector_index * surf_dat_it->second.VertexStride * sizeof(float), 3 * sizeof(float));
+			prd->buffer_get_data(psurf_data->VertexStorageBuffer,
+		                         vector_index * psurf_data->VertexStride * sizeof(float), 3 * sizeof(float));
 		ret.write[i][0] = *(const float *)(vector_buffer.ptr() + 0 * sizeof(float));
 		ret.write[i][1] = *(const float *)(vector_buffer.ptr() + 1 * sizeof(float));
 		ret.write[i][2] = *(const float *)(vector_buffer.ptr() + 2 * sizeof(float));
@@ -417,4 +539,17 @@ RID TriangleRaySelect::generate_index_array_storage_buffer(const Mesh &mesh, int
 	RenderingDevice *const prd = RD::get_singleton();
 	RID storage_buffer = prd->storage_buffer_create(sizeof(int) * index_array.size(), index_array.to_byte_array());
 	return storage_buffer;
+}
+
+std::pair<RID, uint8_t> TriangleRaySelect::generate_vertex_array_storage_buffer(const Mesh &mesh, int surface_id)
+{
+	Array surface_arrays            = mesh.surface_get_arrays(surface_id);
+	PackedVector3Array vertex_array = surface_arrays[RS::ARRAY_VERTEX];
+	assert(vertex_array.size() > 0);
+
+	// Create storage buffer
+	RenderingDevice *const prd = RD::get_singleton();
+	const auto vert_byte_array = vertex_array.to_byte_array();
+	RID storage_buffer         = prd->storage_buffer_create(vert_byte_array.size(), vert_byte_array);
+	return std::make_pair(storage_buffer, (vert_byte_array.size() / vertex_array.size()) / 4);
 }
