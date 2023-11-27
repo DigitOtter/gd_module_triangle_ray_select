@@ -1,0 +1,4 @@
+/.dir-locals.el
+__pycache__
+*.o
+*.gen.h

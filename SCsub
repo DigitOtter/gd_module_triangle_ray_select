@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+
+Import("env")
+
+# Compile shaders
+SConscript("shaders/SCsub")
+
+module_env = env.Clone()
+
+src_list = [
+    "register_types.cpp",
+    "register_vk_extensions.cpp",
+    "triangle_ray_select.cpp",
+]
+module_env.add_source_files(env.modules_sources, src_list)
