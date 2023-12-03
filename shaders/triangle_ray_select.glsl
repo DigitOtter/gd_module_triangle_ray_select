@@ -22,6 +22,9 @@ layout(set=1, binding=0, std430) buffer restrict SelectedVertex {
 
 	uint vertex_ids[3];
 	uint pad_0;
+
+	float point_on_triangle[3];
+	uint pad_1;
 } selected_triangle_data;
 
 layout(push_constant, std430) uniform Params {
@@ -95,7 +98,7 @@ void main() {
 		return;
 	}
 
-	vec3 point_on_plane = IntersectPlane(params.ray_origin, params.ray_normal, vertex_a, face_normal, dotp);
+	const vec3 point_on_plane = IntersectPlane(params.ray_origin, params.ray_normal, vertex_a, face_normal, dotp);
 	if(IntersectTriangle(point_on_plane, vertex_a, vertex_b, vertex_c))	{
 		// TODO: Replace uint comparison with float comparison once float atomics are added
 		const vec3 origin_dist_vec = point_on_plane - params.ray_origin;
@@ -110,6 +113,10 @@ void main() {
 			selected_triangle_data.vertex_ids[0] = index_data.data[index + 0];
 			selected_triangle_data.vertex_ids[1] = index_data.data[index + 1];
 			selected_triangle_data.vertex_ids[2] = index_data.data[index + 2];
+
+			selected_triangle_data.point_on_triangle[0] = point_on_plane[0];
+			selected_triangle_data.point_on_triangle[1] = point_on_plane[1];
+			selected_triangle_data.point_on_triangle[2] = point_on_plane[2];
 		}
 	}
 }

@@ -1,10 +1,6 @@
 #include "triangle_ray_select.h"
 
-#include "core/error/error_macros.h"
-#include "core/math/vector3.h"
-#include "core/templates/vector.h"
-#include "core/variant/array.h"
-#include "core/variant/variant.h"
+#include "core/math/transform_3d.h"
 #include "register_vk_extensions.h"
 
 #include <servers/rendering/renderer_geometry_instance.h>
@@ -19,43 +15,6 @@
 #include <cstring>
 #include <limits>
 #include <strings.h>
-
-void MeshSurfaceIndex::_bind_methods()
-{
-	ClassDB::bind_method(D_METHOD("set_mesh_instance", "mesh_instance"), &MeshSurfaceIndex::set_mesh_instance);
-	ClassDB::bind_method(D_METHOD("get_mesh_instance"), &MeshSurfaceIndex::get_mesh_instance);
-	ClassDB::add_property("MeshSurfaceIndex",
-	                      PropertyInfo(Variant::Type::OBJECT, "mesh_instance", PROPERTY_HINT_OBJECT_ID),
-	                      "set_mesh_instance", "get_mesh_instance");
-
-	ClassDB::bind_method(D_METHOD("set_surface_id", "surface_id"), &MeshSurfaceIndex::set_surface_id);
-	ClassDB::bind_method(D_METHOD("get_surface_id"), &MeshSurfaceIndex::get_surface_id);
-	ClassDB::add_property("MeshSurfaceIndex", PropertyInfo(Variant::Type::INT, "surface_id"), "set_surface_id",
-	                      "get_surface_id");
-
-	ClassDB::bind_method(D_METHOD("set_index_id", "index_id"), &MeshSurfaceIndex::set_index_id);
-	ClassDB::bind_method(D_METHOD("get_index_id"), &MeshSurfaceIndex::get_index_id);
-	ClassDB::add_property("MeshSurfaceIndex", PropertyInfo(Variant::Type::INT, "index_id"), "set_index_id",
-	                      "get_index_id");
-
-	ClassDB::bind_method(D_METHOD("set_ray_origin_dist", "ray_origin_dist"), &MeshSurfaceIndex::set_ray_origin_dist);
-	ClassDB::bind_method(D_METHOD("get_ray_origin_dist"), &MeshSurfaceIndex::get_ray_origin_dist);
-	ClassDB::add_property("MeshSurfaceIndex", PropertyInfo(Variant::Type::FLOAT, "ray_origin_dist"),
-	                      "set_ray_origin_dist", "get_ray_origin_dist");
-
-	ClassDB::bind_method(D_METHOD("set_vertex_ids", "vertex_ids"), &MeshSurfaceIndex::set_vertex_ids);
-	ClassDB::bind_method(D_METHOD("get_vertex_ids"), &MeshSurfaceIndex::get_vertex_ids);
-	ClassDB::add_property("MeshSurfaceIndex", PropertyInfo(Variant::Type::PACKED_INT32_ARRAY, "vertex_ids"),
-	                      "set_vertex_ids", "get_vertex_ids");
-}
-
-MeshSurfaceIndex::MeshSurfaceIndex(MeshInstance3D *_mesh_instance, uint32_t _surface_id, uint32_t _index_id,
-                                   float _ray_origin_dist)
-	: mesh_instance(_mesh_instance),
-	  surface_id(_surface_id),
-	  index_id(_index_id),
-	  ray_origin_dist(_ray_origin_dist)
-{}
 
 TriangleRaySelect::TriangleRaySelect()
 {
@@ -142,6 +101,7 @@ void TriangleRaySelect::vk_extensions_request_atomic()
 RID TriangleRaySelect::get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance)
 {
 	// For future reference:
+	// The following describes how to get an up-to-date vertex buffer from a mesh_instance pointer.
 	// The MeshInstance3D RID is owned by RenderingMethod (RSG::scene). Currently, RendererSceneCull is the derived
 	// class with the actual implementations.
 	// MeshInstance3D's RID data is RendererSceneCull::Instance, which we can get from
@@ -213,24 +173,39 @@ TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data
 void TriangleRaySelect::_bind_methods()
 {
 	using sel_tri_fcn_t =
-		Ref<MeshSurfaceIndex> (TriangleRaySelect::*)(MeshInstance3D *, const Camera3D *, const Point2i &);
+		Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, const Camera3D *, const Point2i &);
 	ClassDB::bind_method(D_METHOD("select_triangle_from_mesh", "mesh_instance", "camera", "pixel"),
 	                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_mesh);
 
 	ClassDB::bind_method(D_METHOD("select_triangle_from_meshes", "mesh_instances_array", "camera", "pixel"),
 	                     &TriangleRaySelect::select_triangle_from_meshes);
 
-	ClassDB::bind_method(D_METHOD("get_triangle_vertices", "mesh_surface_index"),
+	ClassDB::bind_method(D_METHOD("get_triangle_vertices", "mesh_triangle_point"),
 	                     &TriangleRaySelect::get_triangle_vertices);
+
+	{
+		using get_triangle_transform_t =
+			Ref<TriangleTransform> (TriangleRaySelect::*)(const Ref<MeshTrianglePoint> &, const Transform3D &);
+		ClassDB::bind_method(D_METHOD("get_triangle_transform_msi", "mesh_triangle_point", "point"),
+		                     (get_triangle_transform_t)&TriangleRaySelect::get_triangle_transform);
+	}
+
+	{
+		using get_triangle_transform_t =
+			Ref<TriangleTransform> (TriangleRaySelect::*)(const PackedVector3Array &triangle, const Transform3D &point)
+				const;
+		ClassDB::bind_method(D_METHOD("get_triangle_transform", "triangle", "point"),
+		                     (get_triangle_transform_t)&TriangleRaySelect::get_triangle_transform);
+	}
 }
 
-Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_meshes(const Array &mesh_instances,
-                                                                     const Camera3D *camera, const Point2i &pixel)
+Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Array &mesh_instances,
+                                                                      const Camera3D *camera, const Point2i &pixel)
 {
 	const Vector3 ray_origin = camera->project_ray_origin(pixel);
 	const Vector3 ray_normal = camera->project_ray_normal(pixel);
 
-	Ref<MeshSurfaceIndex> ret(memnew(MeshSurfaceIndex()));
+	Ref<MeshTrianglePoint> ret(memnew(MeshTrianglePoint()));
 	const size_t num_meshes = mesh_instances.size();
 	for(size_t i = 0; i < num_meshes; ++i)
 	{
@@ -241,8 +216,8 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_meshes(const Array
 		MeshInstance3D *mesh_instance = static_cast<MeshInstance3D *>(o);
 		const Transform3D &global_tf  = mesh_instance->get_global_transform();
 
-		Ref<MeshSurfaceIndex> cur_res = this->select_triangle_from_mesh(mesh_instance, global_tf.xform_inv(ray_origin),
-		                                                                global_tf.basis.xform_inv(ray_normal));
+		Ref<MeshTrianglePoint> cur_res = this->select_triangle_from_mesh(mesh_instance, global_tf.xform_inv(ray_origin),
+		                                                                 global_tf.basis.xform_inv(ray_normal));
 
 		if(cur_res->ray_origin_dist < ret->ray_origin_dist)
 		{
@@ -253,20 +228,21 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_meshes(const Array
 	return ret;
 }
 
-Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
-                                                                   const Camera3D *camera, const Point2i &pixel)
+Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
+                                                                    const Camera3D *camera, const Point2i &pixel)
 {
 	return this->select_triangle_from_mesh(mesh_instance, camera->project_ray_origin(pixel),
 	                                       camera->project_ray_normal(pixel));
 }
 
-Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
-                                                                   const Vector3 &ray_origin, const Vector3 &ray_normal)
+Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
+                                                                    const Vector3 &ray_origin,
+                                                                    const Vector3 &ray_normal)
 {
-	ERR_FAIL_COND_V(mesh_instance == nullptr, Ref(new MeshSurfaceIndex()));
+	ERR_FAIL_COND_V(mesh_instance == nullptr, Ref(new MeshTrianglePoint()));
 
 	RID mesh_rid = get_mesh_storage_instance(mesh_instance);
-	ERR_FAIL_COND_V(mesh_rid.is_null(), Ref(new MeshSurfaceIndex()));
+	ERR_FAIL_COND_V(mesh_rid.is_null(), Ref(new MeshTrianglePoint()));
 
 	// RID mesh_storage_instance_id                            = get_mesh_instance_storage_instance(mesh_instance);
 	// mesh_storage_t::MeshInstance *const pmesh_instance_data =
@@ -283,7 +259,7 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3
 
 	// Final result
 	constexpr auto MAX_DIST = std::numeric_limits<uint32_t>::max();
-	Ref<MeshSurfaceIndex> ret(memnew(MeshSurfaceIndex));
+	Ref<MeshTrianglePoint> ret(memnew(MeshTrianglePoint));
 	ret->mesh_instance       = mesh_instance;
 	uint32_t ray_origin_dist = MAX_DIST;
 
@@ -377,14 +353,16 @@ Ref<MeshSurfaceIndex> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3
 			ray_origin_dist = psel_vertex->origin_dist;
 			ret->index_id   = psel_vertex->triangle_index;
 			ret->surface_id = i;
-
 			memcpy(ret->vertex_ids, psel_vertex->vertex_ids, sizeof(float) * 3);
+			ret->point_on_triangle[0] = psel_vertex->point_on_triangle[0];
+			ret->point_on_triangle[1] = psel_vertex->point_on_triangle[1];
+			ret->point_on_triangle[2] = psel_vertex->point_on_triangle[2];
 		}
 	}
 
 	if(ray_origin_dist == MAX_DIST)
 	{
-		ret->ray_origin_dist = MeshSurfaceIndex::INVALID_DIST;
+		ret->ray_origin_dist = MeshTrianglePoint::INVALID_DIST;
 	}
 	else
 	{
@@ -401,7 +379,7 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 	const mesh_storage_t::Mesh::Surface *const pmesh_surface    = mesh_instance_data->mesh->surfaces[surface_id];
 
 	SurfaceData surface_data;
-	surface_data.IndexStorageBuffer  = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+	surface_data.IndexStorageBuffer = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
 
 	surface_data.VertexStorageBuffer = psurface->vertex_buffer;
 	surface_data.VertexStride        = (pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4;
@@ -476,21 +454,21 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 	return surface_data;
 }
 
-PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfaceIndex> &mesh_surface_index)
+PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point)
 {
-	ERR_FAIL_COND_V(mesh_surface_index.is_null(), PackedVector3Array());
-	ERR_FAIL_COND_V(mesh_surface_index->index_id == MeshSurfaceIndex::INVALID_ID, PackedVector3Array());
+	ERR_FAIL_COND_V(mesh_triangle_point.is_null(), PackedVector3Array());
+	ERR_FAIL_COND_V(mesh_triangle_point->index_id == MeshTrianglePoint::INVALID_ID, PackedVector3Array());
 
 	const SurfaceData *psurf_data;
 	if(mesh_storage_t::get_singleton()->mesh_needs_instance(
-		   mesh_surface_index->mesh_instance->get_mesh()->get_rid(),
-		   !mesh_surface_index->mesh_instance->get_skeleton_path().is_empty()))
+		   mesh_triangle_point->mesh_instance->get_mesh()->get_rid(),
+		   !mesh_triangle_point->mesh_instance->get_skeleton_path().is_empty()))
 	{
 		const mesh_storage_t::MeshInstance *pmesh_data =
-			TriangleRaySelect::get_mesh_instance_vertex_data(mesh_surface_index->mesh_instance);
+			TriangleRaySelect::get_mesh_instance_vertex_data(mesh_triangle_point->mesh_instance);
 		ERR_FAIL_COND_V(!pmesh_data, PackedVector3Array());
 
-		const mesh_storage_t::MeshInstance::Surface *psurface = &pmesh_data->surfaces[mesh_surface_index->surface_id];
+		const mesh_storage_t::MeshInstance::Surface *psurface = &pmesh_data->surfaces[mesh_triangle_point->surface_id];
 
 		const auto surf_dat_it = this->_instance_surface_uniform_set.find(psurface);
 		ERR_FAIL_COND_V(surf_dat_it == this->_instance_surface_uniform_set.end(), PackedVector3Array());
@@ -500,10 +478,10 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfac
 	else
 	{
 		const mesh_storage_t::Mesh *pmesh_data =
-			TriangleRaySelect::get_mesh_vertex_data(mesh_surface_index->mesh_instance);
+			TriangleRaySelect::get_mesh_vertex_data(mesh_triangle_point->mesh_instance);
 		ERR_FAIL_COND_V(!pmesh_data, PackedVector3Array());
 
-		const mesh_storage_t::Mesh::Surface *psurface = pmesh_data->surfaces[mesh_surface_index->surface_id];
+		const mesh_storage_t::Mesh::Surface *psurface = pmesh_data->surfaces[mesh_triangle_point->surface_id];
 
 		const auto surf_dat_it = this->_mesh_surface_uniform_set.find(psurface);
 		ERR_FAIL_COND_V(surf_dat_it == this->_mesh_surface_uniform_set.end(), PackedVector3Array());
@@ -517,7 +495,7 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfac
 	ret.resize(3);
 	for(size_t i = 0; i < 3; ++i)
 	{
-		const int32_t vector_index = mesh_surface_index->vertex_ids[i];
+		const int32_t vector_index = mesh_triangle_point->vertex_ids[i];
 		const Vector<uint8_t> vector_buffer =
 			prd->buffer_get_data(psurf_data->VertexStorageBuffer,
 		                         vector_index * psurf_data->VertexStride * sizeof(float), 3 * sizeof(float));
@@ -527,6 +505,19 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshSurfac
 	}
 
 	return ret;
+}
+
+Ref<TriangleTransform> TriangleRaySelect::get_triangle_transform(const Ref<MeshTrianglePoint> &mesh_triangle_point,
+                                                                 const Transform3D &point_tf)
+{
+	const PackedVector3Array &triangle = this->get_triangle_vertices(mesh_triangle_point);
+	return get_triangle_transform(triangle, point_tf);
+}
+
+Ref<TriangleTransform> TriangleRaySelect::get_triangle_transform(const PackedVector3Array &triangle,
+                                                                 const Transform3D &point_tf) const
+{
+	return Ref(memnew(TriangleTransform(triangle, point_tf)));
 }
 
 RID TriangleRaySelect::generate_index_array_storage_buffer(const Mesh &mesh, int surface_id)

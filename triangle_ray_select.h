@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/math/math_defs.h"
-#include "core/variant/variant.h"
+#include "mesh_triangle_point.h"
 #include "shaders/triangle_ray_select.glsl.gen.h"
+#include "triangle_transform.h"
 
 #include <core/object/ref_counted.h>
 #include <scene/3d/camera_3d.h>
@@ -14,85 +14,6 @@
 #include <limits>
 #include <map>
 #include <utility>
-
-struct MeshSurfaceIndex : public RefCounted
-{
-	static constexpr auto INVALID_ID   = std::numeric_limits<uint32_t>::max();
-	static constexpr auto INVALID_DIST = std::numeric_limits<float>::infinity();
-
-	MeshInstance3D *mesh_instance = nullptr;
-	uint32_t surface_id           = INVALID_ID;
-	uint32_t index_id             = INVALID_ID;
-	float ray_origin_dist         = INVALID_DIST;
-
-	int32_t vertex_ids[3];
-
-	GDCLASS(MeshSurfaceIndex, RefCounted);
-
-	public:
-	MeshSurfaceIndex() = default;
-	MeshSurfaceIndex(MeshInstance3D *_mesh_instance, uint32_t _surface_id, uint32_t _index_id, float _ray_origin_dist);
-
-	protected:
-	static void _bind_methods();
-
-	MeshInstance3D *get_mesh_instance()
-	{
-		return this->mesh_instance;
-	}
-
-	void set_mesh_instance(MeshInstance3D *_mesh_instance)
-	{
-		this->mesh_instance = _mesh_instance;
-	}
-
-	uint32_t get_surface_id()
-	{
-		return this->surface_id;
-	}
-
-	void set_surface_id(uint32_t _surface_id)
-	{
-		this->surface_id = _surface_id;
-	}
-
-	uint32_t get_index_id()
-	{
-		return this->index_id;
-	}
-
-	void set_index_id(uint32_t _index_id)
-	{
-		this->index_id = _index_id;
-	}
-
-	float get_ray_origin_dist()
-	{
-		return this->ray_origin_dist;
-	}
-
-	void set_ray_origin_dist(float _ray_origin_dist)
-	{
-		this->ray_origin_dist = _ray_origin_dist;
-	}
-
-	PackedInt32Array get_vertex_ids()
-	{
-		return PackedInt32Array({this->vertex_ids[0], this->vertex_ids[1], this->vertex_ids[2]});
-	}
-
-	void set_vertex_ids(const PackedInt32Array &_vertex_ids)
-	{
-		if(_vertex_ids.size() != 3)
-		{
-			return;
-		}
-
-		this->vertex_ids[0] = _vertex_ids[0];
-		this->vertex_ids[1] = _vertex_ids[1];
-		this->vertex_ids[2] = _vertex_ids[2];
-	}
-};
 
 class TriangleRaySelect : public RefCounted
 {
@@ -125,6 +46,9 @@ class TriangleRaySelect : public RefCounted
 
 			uint32_t vertex_ids[3];
 			uint32_t pad_0;
+
+			float point_on_triangle[3];
+			uint32_t pad_1;
 
 			static constexpr auto INVALID_ID = std::numeric_limits<uint32_t>::max();
 			static constexpr auto MAX_DIST   = std::numeric_limits<uint32_t>::max();
@@ -170,14 +94,14 @@ class TriangleRaySelect : public RefCounted
 
 	static void _bind_methods();
 
-	Ref<MeshSurfaceIndex> select_triangle_from_meshes(const Array &mesh_instances, const Camera3D *camera,
-	                                                  const Point2i &pixel);
+	Ref<MeshTrianglePoint> select_triangle_from_meshes(const Array &mesh_instances, const Camera3D *camera,
+	                                                   const Point2i &pixel);
 
-	Ref<MeshSurfaceIndex> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Camera3D *camera,
-	                                                const Point2i &pixel);
+	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Camera3D *camera,
+	                                                 const Point2i &pixel);
 
-	Ref<MeshSurfaceIndex> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Vector3 &ray_origin,
-	                                                const Vector3 &ray_normal);
+	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Vector3 &ray_origin,
+	                                                 const Vector3 &ray_normal);
 
 	SurfaceData create_mesh_instance_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
 	                                              mesh_storage_t::MeshInstance *mesh_instance_data);
@@ -185,7 +109,13 @@ class TriangleRaySelect : public RefCounted
 	                                     mesh_storage_t::Mesh *mesh_data);
 
 
-	PackedVector3Array get_triangle_vertices(const Ref<MeshSurfaceIndex> &mesh_surface_index);
+	PackedVector3Array get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point);
+
+	Ref<TriangleTransform> get_triangle_transform(const Ref<MeshTrianglePoint> &mesh_triangle_point,
+	                                              const Transform3D &point_tf);
+
+	Ref<TriangleTransform> get_triangle_transform(const PackedVector3Array &triangle,
+	                                              const Transform3D &point_tf) const;
 
 	private:
 	TriangleRaySelectShader _triangle_ray_select_shader;

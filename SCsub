@@ -8,8 +8,11 @@ SConscript("shaders/SCsub")
 module_env = env.Clone()
 
 src_list = [
+    "mesh_triangle_point.cpp",
+    "pseudo_inverse.cpp",
     "register_types.cpp",
     "register_vk_extensions.cpp",
+    "triangle_transform.cpp",
     "triangle_ray_select.cpp",
 ]
 module_env.add_source_files(env.modules_sources, src_list)
