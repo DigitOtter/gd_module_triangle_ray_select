@@ -381,8 +381,14 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 	SurfaceData surface_data;
 	surface_data.IndexStorageBuffer = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
 
-	surface_data.VertexStorageBuffer = psurface->vertex_buffer;
-	surface_data.VertexStride        = (pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4;
+	// From mesh_storage.cpp
+	const bool has_normal               = pmesh_surface->format & RS::ARRAY_FORMAT_NORMAL;
+	const bool has_tangent              = pmesh_surface->format & RS::ARRAY_FORMAT_TANGENT;
+	const uint8_t normal_tangent_stride = (has_normal ? 1 : 0) + (has_tangent ? 1 : 0);
+
+	surface_data.VertexStorageBuffer = psurface->vertex_buffer[psurface->current_buffer];
+	surface_data.VertexStride =
+		(pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4 - normal_tangent_stride;
 
 	Vector<RD::Uniform> uniforms;
 	{
@@ -542,5 +548,8 @@ std::pair<RID, uint8_t> TriangleRaySelect::generate_vertex_array_storage_buffer(
 	RenderingDevice *const prd = RD::get_singleton();
 	const auto vert_byte_array = vertex_array.to_byte_array();
 	RID storage_buffer         = prd->storage_buffer_create(vert_byte_array.size(), vert_byte_array);
-	return std::make_pair(storage_buffer, (vert_byte_array.size() / vertex_array.size()) / 4);
+
+	const uint8_t vertex_stride = (vert_byte_array.size() / vertex_array.size()) / 4;
+
+	return std::make_pair(storage_buffer, vertex_stride);
 }

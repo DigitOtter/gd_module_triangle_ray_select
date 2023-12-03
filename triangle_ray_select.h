@@ -59,13 +59,13 @@ class TriangleRaySelect : public RefCounted
 			uint32_t IndexCount;
 			uint32_t IndexStride;
 			uint32_t VertexStride;
-			uint32_t pad0;
+			uint32_t pad_0;
 
 			float RayOrigin[3];
-			uint32_t pad1;
+			uint32_t pad_1;
 
 			float RayNormal[3];
-			uint32_t pad2;
+			uint32_t pad_2;
 		};
 
 		TriangleRaySelectShaderRD shader;
@@ -107,7 +107,6 @@ class TriangleRaySelect : public RefCounted
 	                                              mesh_storage_t::MeshInstance *mesh_instance_data);
 	SurfaceData create_mesh_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
 	                                     mesh_storage_t::Mesh *mesh_data);
-
 
 	PackedVector3Array get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point);
 
