@@ -5,7 +5,7 @@
 
 #include <core/object/class_db.h>
 
-void initialize_triangle_ray_select_module(ModuleInitializationLevel p_level)
+void initialize_gd_module_triangle_ray_select_module(ModuleInitializationLevel p_level)
 {
 	if(p_level == MODULE_INITIALIZATION_LEVEL_CORE)
 	{
@@ -19,4 +19,4 @@ void initialize_triangle_ray_select_module(ModuleInitializationLevel p_level)
 	}
 }
 
-void uninitialize_triangle_ray_select_module(ModuleInitializationLevel p_level) {}
+void uninitialize_gd_module_triangle_ray_select_module(ModuleInitializationLevel p_level) {}
