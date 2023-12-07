@@ -1,0 +1,20 @@
+diff --git a/servers/rendering/renderer_rd/storage_rd/mesh_storage.h b/servers/rendering/renderer_rd/storage_rd/mesh_storage.h
+index db54816e09..fbeac2a115 100644
+--- a/servers/rendering/renderer_rd/storage_rd/mesh_storage.h
++++ b/servers/rendering/renderer_rd/storage_rd/mesh_storage.h
+@@ -68,6 +68,7 @@ private:
+ 
+ 	RID mesh_default_rd_buffers[DEFAULT_RD_BUFFER_MAX];
+ 
++	public:
+ 	struct MeshInstance;
+ 
+ 	struct Mesh {
+@@ -203,6 +204,7 @@ private:
+ 	SelfList<MeshInstance>::List dirty_mesh_instance_weights;
+ 	SelfList<MeshInstance>::List dirty_mesh_instance_arrays;
+ 
++	private:
+ 	/* MultiMesh */
+ 
+ 	struct MultiMesh {
