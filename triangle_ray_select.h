@@ -19,12 +19,6 @@ class TriangleRaySelect : public RefCounted
 {
 	GDCLASS(TriangleRaySelect, RefCounted);
 
-	struct Ray
-	{
-		Vector3 Origin;
-		Vector3 Normal;
-	};
-
 	struct SurfaceData
 	{
 		uint32_t IndexCount = 0;
@@ -41,11 +35,8 @@ class TriangleRaySelect : public RefCounted
 	{
 		struct SelectedVertex
 		{
-			uint32_t triangle_index;
 			uint32_t origin_dist;
-
 			uint32_t vertex_ids[3];
-			uint32_t pad_0;
 
 			float point_on_triangle[3];
 			uint32_t pad_1;
@@ -73,6 +64,7 @@ class TriangleRaySelect : public RefCounted
 		RID shader_version;
 		RID pipeline;
 
+		// Same number as used for the skeleton.glsl shader
 		static constexpr uint32_t NUM_COMPUTE_SHADERS = 64;
 	};
 
@@ -84,29 +76,22 @@ class TriangleRaySelect : public RefCounted
 
 	static void vk_extensions_request_atomic();
 
-	static RID get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(RID mesh_storage_instance_id);
-
-	static RID get_mesh_storage_instance(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::Mesh *get_mesh_vertex_data(MeshInstance3D *mesh_instance);
-	static mesh_storage_t::Mesh *get_mesh_vertex_data(RID mesh_storage_instance_id);
-
 	static void _bind_methods();
 
 	Ref<MeshTrianglePoint> select_triangle_from_meshes(const Array &mesh_instances, const Camera3D *camera,
 	                                                   const Point2i &pixel);
+	Ref<MeshTrianglePoint> select_triangle_from_meshes(const Array &mesh_instances, const Vector3 &ray_origin,
+	                                                   const Vector3 &ray_normal);
 
 	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Camera3D *camera,
 	                                                 const Point2i &pixel);
-
 	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Vector3 &ray_origin,
 	                                                 const Vector3 &ray_normal);
 
 	SurfaceData create_mesh_instance_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
-	                                              mesh_storage_t::MeshInstance *mesh_instance_data);
+	                                              mesh_storage_t::MeshInstance *mesh_instance_data) const;
 	SurfaceData create_mesh_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
-	                                     mesh_storage_t::Mesh *mesh_data);
+	                                     mesh_storage_t::Mesh *mesh_data) const;
 
 	PackedVector3Array get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point);
 
@@ -127,4 +112,12 @@ class TriangleRaySelect : public RefCounted
 
 	static RID generate_index_array_storage_buffer(const Mesh &mesh, int surface_id);
 	static std::pair<RID, uint8_t> generate_vertex_array_storage_buffer(const Mesh &mesh, int surface_id);
+
+	static RID get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::MeshInstance *get_mesh_instance_vertex_data(RID mesh_storage_instance_id);
+
+	static RID get_mesh_storage_instance(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::Mesh *get_mesh_vertex_data(MeshInstance3D *mesh_instance);
+	static mesh_storage_t::Mesh *get_mesh_vertex_data(RID mesh_storage_instance_id);
 };

@@ -10,7 +10,6 @@ struct MeshTrianglePoint : public RefCounted
 
 	MeshInstance3D *mesh_instance = nullptr;
 	uint32_t surface_id           = INVALID_ID;
-	uint32_t index_id             = INVALID_ID;
 	float ray_origin_dist         = INVALID_DIST;
 
 	int32_t vertex_ids[3];
@@ -21,7 +20,7 @@ struct MeshTrianglePoint : public RefCounted
 
 	public:
 	MeshTrianglePoint() = default;
-	MeshTrianglePoint(MeshInstance3D *_mesh_instance, uint32_t _surface_id, uint32_t _index_id, float _ray_origin_dist);
+	MeshTrianglePoint(MeshInstance3D *_mesh_instance, uint32_t _surface_id, float _ray_origin_dist);
 
 	protected:
 	static void _bind_methods();
@@ -44,16 +43,6 @@ struct MeshTrianglePoint : public RefCounted
 	void set_surface_id(uint32_t _surface_id)
 	{
 		this->surface_id = _surface_id;
-	}
-
-	uint32_t get_index_id()
-	{
-		return this->index_id;
-	}
-
-	void set_index_id(uint32_t _index_id)
-	{
-		this->index_id = _index_id;
 	}
 
 	float get_ray_origin_dist()

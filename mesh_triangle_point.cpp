@@ -13,11 +13,6 @@ void MeshTrianglePoint::_bind_methods()
 	ClassDB::add_property("MeshTrianglePoint", PropertyInfo(Variant::Type::INT, "surface_id"), "set_surface_id",
 	                      "get_surface_id");
 
-	ClassDB::bind_method(D_METHOD("set_index_id", "index_id"), &MeshTrianglePoint::set_index_id);
-	ClassDB::bind_method(D_METHOD("get_index_id"), &MeshTrianglePoint::get_index_id);
-	ClassDB::add_property("MeshTrianglePoint", PropertyInfo(Variant::Type::INT, "index_id"), "set_index_id",
-	                      "get_index_id");
-
 	ClassDB::bind_method(D_METHOD("set_ray_origin_dist", "ray_origin_dist"), &MeshTrianglePoint::set_ray_origin_dist);
 	ClassDB::bind_method(D_METHOD("get_ray_origin_dist"), &MeshTrianglePoint::get_ray_origin_dist);
 	ClassDB::add_property("MeshTrianglePoint", PropertyInfo(Variant::Type::FLOAT, "ray_origin_dist"),
@@ -35,10 +30,8 @@ void MeshTrianglePoint::_bind_methods()
 	                      "set_point_on_triangle", "get_point_on_triangle");
 }
 
-MeshTrianglePoint::MeshTrianglePoint(MeshInstance3D *_mesh_instance, uint32_t _surface_id, uint32_t _index_id,
-                                     float _ray_origin_dist)
+MeshTrianglePoint::MeshTrianglePoint(MeshInstance3D *_mesh_instance, uint32_t _surface_id, float _ray_origin_dist)
 	: mesh_instance(_mesh_instance),
 	  surface_id(_surface_id),
-	  index_id(_index_id),
 	  ray_origin_dist(_ray_origin_dist)
 {}

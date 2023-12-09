@@ -5,6 +5,7 @@
 //#extension GL_EXT_shader_atomic_float2 : enable
 #extension GL_EXT_shader_atomic_int64 : enable
 
+// Same number as used for the skeleton.glsl shader
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 layout(set=0, binding=0, std430) buffer restrict readonly IndexData {
@@ -16,12 +17,8 @@ layout(set=0, binding=1, std430) buffer restrict readonly VertexData {
 } vertex_data;
 
 layout(set=1, binding=0, std430) buffer restrict SelectedVertex {
-	// Triangle closest to the origin (triangle_index is the first index_buffer id of the triangle)
-	uint triangle_index;
 	uint origin_dist;
-
 	uint vertex_ids[3];
-	uint pad_0;
 
 	float point_on_triangle[3];
 	uint pad_1;
@@ -108,8 +105,6 @@ void main() {
 		atomicMin(selected_triangle_data.origin_dist, origin_dist);
 		barrier();
 		if(origin_dist == selected_triangle_data.origin_dist) {
-			selected_triangle_data.triangle_index = index;
-
 			selected_triangle_data.vertex_ids[0] = index_data.data[index + 0];
 			selected_triangle_data.vertex_ids[1] = index_data.data[index + 1];
 			selected_triangle_data.vertex_ids[2] = index_data.data[index + 2];

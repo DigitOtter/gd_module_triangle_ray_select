@@ -95,90 +95,42 @@ TriangleRaySelect::~TriangleRaySelect()
 
 void TriangleRaySelect::vk_extensions_request_atomic()
 {
+	// Enables Vulkan's VK_KHR_SHADER_ATOMIC_INT64 extension, required for comparing distances of triangles along a
+	// ray to the ray's origin.
+	// Due to problems with redefinition of Window, the function is in a separate cpp file
 	::vk_extensions_request_atomic();
-}
-
-RID TriangleRaySelect::get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance)
-{
-	// For future reference:
-	// The following describes how to get an up-to-date vertex buffer from a mesh_instance pointer.
-	// The MeshInstance3D RID is owned by RenderingMethod (RSG::scene). Currently, RendererSceneCull is the derived
-	// class with the actual implementations.
-	// MeshInstance3D's RID data is RendererSceneCull::Instance, which we can get from
-	// RendererSceneCull::instance_owner. From there, we can access MeshInstance3D's base data (Instance::base_data).
-	// The base_data is formatted as RendererSceneCull::InstanceGeometryData, which gets us our desired
-	// InstanceGeometryData::mesh_instance.
-
-	// Get RendererSceneCull
-	auto *const pscene_cull = dynamic_cast<RendererSceneCull *>(RSG::scene);
-	ERR_FAIL_NULL_V(pscene_cull, RID());
-	assert(pscene_cull->instance_owner.owns(mesh_instance->get_instance()));
-
-	// Get mesh_instance RID data
-	RendererSceneCull::Instance *instance = pscene_cull->instance_owner.get_or_null(mesh_instance->get_instance());
-	ERR_FAIL_NULL_V(instance, RID());
-
-	// Get MeshInstance3D base_data from instance
-	ERR_FAIL_COND_V(instance->base_type != RS::InstanceType::INSTANCE_MESH, RID());
-	auto *const geom = static_cast<RendererSceneCull::InstanceGeometryData *>(instance->base_data);
-
-	// Get mesh_id from base_data
-	return dynamic_cast<RenderGeometryInstanceBase *>(geom->geometry_instance)->mesh_instance;
-}
-
-TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
-	MeshInstance3D *mesh_instance)
-{
-	RID mesh_storage_instance_id = get_mesh_instance_storage_instance(mesh_instance);
-	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
-
-	return get_mesh_instance_vertex_data(mesh_storage_instance_id);
-}
-
-TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
-	RID mesh_storage_instance_id)
-{
-	// Check that mesh_id is really owned by mesh_storage
-	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
-	auto &mesh_instance_owner    = mesh_storage.mesh_instance_owner;
-	assert(mesh_instance_owner.owns(mesh_storage_instance_id));
-
-	return mesh_instance_owner.get_or_null(mesh_storage_instance_id);
-}
-
-RID TriangleRaySelect::get_mesh_storage_instance(MeshInstance3D *mesh_instance)
-{
-	assert(mesh_storage_t::get_singleton()->mesh_owner.owns(mesh_instance->get_mesh()->get_rid()));
-	return mesh_instance->get_mesh()->get_rid();
-}
-
-TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(MeshInstance3D *mesh_instance)
-{
-	RID mesh_storage_instance_id = get_mesh_storage_instance(mesh_instance);
-	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
-
-	return get_mesh_vertex_data(mesh_storage_instance_id);
-}
-
-TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(RID mesh_storage_instance_id)
-{
-	// Check that mesh_id is really owned by mesh_storage
-	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
-	auto &mesh_owner             = mesh_storage.mesh_owner;
-	assert(mesh_owner.owns(mesh_storage_instance_id));
-
-	return mesh_owner.get_or_null(mesh_storage_instance_id);
 }
 
 void TriangleRaySelect::_bind_methods()
 {
-	using sel_tri_fcn_t =
-		Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, const Camera3D *, const Point2i &);
-	ClassDB::bind_method(D_METHOD("select_triangle_from_mesh", "mesh_instance", "camera", "pixel"),
-	                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_mesh);
+	{
+		using sel_tri_fcn_t =
+			Ref<MeshTrianglePoint> (TriangleRaySelect::*)(const Array &, const Camera3D *, const Point2i &);
+		ClassDB::bind_method(D_METHOD("select_triangle_from_meshes_cam", "mesh_instances_array", "camera", "pixel"),
+		                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_meshes);
+	}
 
-	ClassDB::bind_method(D_METHOD("select_triangle_from_meshes", "mesh_instances_array", "camera", "pixel"),
-	                     &TriangleRaySelect::select_triangle_from_meshes);
+	{
+		using sel_tri_fcn_t =
+			Ref<MeshTrianglePoint> (TriangleRaySelect::*)(const Array &, const Vector3 &, const Vector3 &);
+		ClassDB::bind_method(
+			D_METHOD("select_triangle_from_meshes", "mesh_instances_array", "ray_origin", "ray_normal"),
+			(sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_meshes);
+	}
+
+	{
+		using sel_tri_fcn_t =
+			Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, const Camera3D *, const Point2i &);
+		ClassDB::bind_method(D_METHOD("select_triangle_from_mesh_cam", "mesh_instance", "camera", "pixel"),
+		                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_mesh);
+	}
+
+	{
+		using sel_tri_fcn_t =
+			Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, const Vector3 &, const Vector3 &);
+		ClassDB::bind_method(D_METHOD("select_triangle_from_mesh", "mesh_instance", "ray_origin", "ray_normal"),
+		                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_mesh);
+	}
 
 	ClassDB::bind_method(D_METHOD("get_triangle_vertices", "mesh_triangle_point"),
 	                     &TriangleRaySelect::get_triangle_vertices);
@@ -202,9 +154,14 @@ void TriangleRaySelect::_bind_methods()
 Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Array &mesh_instances,
                                                                       const Camera3D *camera, const Point2i &pixel)
 {
-	const Vector3 ray_origin = camera->project_ray_origin(pixel);
-	const Vector3 ray_normal = camera->project_ray_normal(pixel);
+	return this->select_triangle_from_meshes(mesh_instances, camera->project_ray_origin(pixel),
+	                                         camera->project_local_ray_normal(pixel));
+}
 
+Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Array &mesh_instances,
+                                                                      const Vector3 &ray_origin,
+                                                                      const Vector3 &ray_normal)
+{
 	Ref<MeshTrianglePoint> ret(memnew(MeshTrianglePoint()));
 	const size_t num_meshes = mesh_instances.size();
 	for(size_t i = 0; i < num_meshes; ++i)
@@ -244,18 +201,9 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 	RID mesh_rid = get_mesh_storage_instance(mesh_instance);
 	ERR_FAIL_COND_V(mesh_rid.is_null(), Ref(new MeshTrianglePoint()));
 
-	// RID mesh_storage_instance_id                            = get_mesh_instance_storage_instance(mesh_instance);
-	// mesh_storage_t::MeshInstance *const pmesh_instance_data =
-	// get_mesh_instance_vertex_data(mesh_storage_instance_id);
-
-	// Apply skeleton and blendshape deforms
-	// mesh_storage_t *pmesh_storage = mesh_storage_t::get_singleton();
-	// pmesh_storage->mesh_instance_check_for_update(mesh_storage_instance_id);
-	// pmesh_storage->update_mesh_instances();
-
 	// Compute shader defaults
 	constexpr TriangleRaySelectShader::SelectedVertex default_selected_vertex{
-		TriangleRaySelectShader::SelectedVertex::INVALID_ID, TriangleRaySelectShader::SelectedVertex::MAX_DIST};
+		TriangleRaySelectShader::SelectedVertex::MAX_DIST};
 
 	// Final result
 	constexpr auto MAX_DIST = std::numeric_limits<uint32_t>::max();
@@ -276,8 +224,12 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 	RenderingDevice *const prd   = RD::get_singleton();
 	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
 
+	// Mesh vertex data is stored at one of two locations. If a mesh contains blend shapes or needs a skeleton, the
+	// vertex buffer is stored in a mesh_storage_t::MeshInstance struct (owned by mesh_storage_t::mesh_instance_owner).
+	// If not, it's stored in a mesh_storage_t::Mesh struct (owned by mesh_storage_t::mesh_owner)
 	const bool needs_instance =
 		mesh_storage.mesh_needs_instance(mesh_rid, !mesh_instance->get_skeleton_path().is_empty());
+
 	const size_t surface_count = mesh_instance->get_surface_override_material_count();
 	for(size_t i = 0; i < surface_count; ++i)
 	{
@@ -351,7 +303,6 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 		if(psel_vertex->origin_dist < ray_origin_dist)
 		{
 			ray_origin_dist = psel_vertex->origin_dist;
-			ret->index_id   = psel_vertex->triangle_index;
 			ret->surface_id = i;
 			memcpy(ret->vertex_ids, psel_vertex->vertex_ids, sizeof(float) * 3);
 			ret->point_on_triangle[0] = psel_vertex->point_on_triangle[0];
@@ -372,7 +323,7 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 }
 
 TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_data(
-	const MeshInstance3D &mesh_instance, size_t surface_id, mesh_storage_t::MeshInstance *mesh_instance_data)
+	const MeshInstance3D &mesh_instance, size_t surface_id, mesh_storage_t::MeshInstance *mesh_instance_data) const
 {
 	assert(surface_id < mesh_instance_data->surfaces.size());
 	const mesh_storage_t::MeshInstance::Surface *const psurface = mesh_instance_data->surfaces.ptr() + surface_id;
@@ -421,7 +372,7 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 
 TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const MeshInstance3D &mesh_instance,
                                                                            size_t surface_id,
-                                                                           mesh_storage_t::Mesh *mesh_data)
+                                                                           mesh_storage_t::Mesh *mesh_data) const
 {
 	assert(surface_id < mesh_data->surface_count);
 	const mesh_storage_t::Mesh::Surface *const pmesh_surface = mesh_data->surfaces[surface_id];
@@ -463,7 +414,6 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point)
 {
 	ERR_FAIL_COND_V(mesh_triangle_point.is_null(), PackedVector3Array());
-	ERR_FAIL_COND_V(mesh_triangle_point->index_id == MeshTrianglePoint::INVALID_ID, PackedVector3Array());
 
 	const SurfaceData *psurf_data;
 	if(mesh_storage_t::get_singleton()->mesh_needs_instance(
@@ -552,4 +502,76 @@ std::pair<RID, uint8_t> TriangleRaySelect::generate_vertex_array_storage_buffer(
 	const uint8_t vertex_stride = (vert_byte_array.size() / vertex_array.size()) / 4;
 
 	return std::make_pair(storage_buffer, vertex_stride);
+}
+
+RID TriangleRaySelect::get_mesh_instance_storage_instance(MeshInstance3D *mesh_instance)
+{
+	// For future reference:
+	// The following describes how to get an up-to-date vertex buffer from a mesh_instance pointer.
+	// The MeshInstance3D RID is owned by RenderingMethod (RSG::scene). Currently, RendererSceneCull is the derived
+	// class with the actual implementations.
+	// MeshInstance3D's RID data is RendererSceneCull::Instance, which we can get from
+	// RendererSceneCull::instance_owner. From there, we can access MeshInstance3D's base data (Instance::base_data).
+	// The base_data is formatted as RendererSceneCull::InstanceGeometryData, which gets us our desired
+	// InstanceGeometryData::mesh_instance.
+
+	// Get RendererSceneCull
+	auto *const pscene_cull = dynamic_cast<RendererSceneCull *>(RSG::scene);
+	ERR_FAIL_NULL_V(pscene_cull, RID());
+	assert(pscene_cull->instance_owner.owns(mesh_instance->get_instance()));
+
+	// Get mesh_instance RID data
+	RendererSceneCull::Instance *instance = pscene_cull->instance_owner.get_or_null(mesh_instance->get_instance());
+	ERR_FAIL_NULL_V(instance, RID());
+
+	// Get MeshInstance3D base_data from instance
+	ERR_FAIL_COND_V(instance->base_type != RS::InstanceType::INSTANCE_MESH, RID());
+	auto *const geom = static_cast<RendererSceneCull::InstanceGeometryData *>(instance->base_data);
+
+	// Get mesh_id from base_data
+	return dynamic_cast<RenderGeometryInstanceBase *>(geom->geometry_instance)->mesh_instance;
+}
+
+TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
+	MeshInstance3D *mesh_instance)
+{
+	RID mesh_storage_instance_id = get_mesh_instance_storage_instance(mesh_instance);
+	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
+
+	return get_mesh_instance_vertex_data(mesh_storage_instance_id);
+}
+
+TriangleRaySelect::mesh_storage_t::MeshInstance *TriangleRaySelect::get_mesh_instance_vertex_data(
+	RID mesh_storage_instance_id)
+{
+	// Check that mesh_id is really owned by mesh_storage
+	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
+	auto &mesh_instance_owner    = mesh_storage.mesh_instance_owner;
+	assert(mesh_instance_owner.owns(mesh_storage_instance_id));
+
+	return mesh_instance_owner.get_or_null(mesh_storage_instance_id);
+}
+
+RID TriangleRaySelect::get_mesh_storage_instance(MeshInstance3D *mesh_instance)
+{
+	assert(mesh_storage_t::get_singleton()->mesh_owner.owns(mesh_instance->get_mesh()->get_rid()));
+	return mesh_instance->get_mesh()->get_rid();
+}
+
+TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(MeshInstance3D *mesh_instance)
+{
+	RID mesh_storage_instance_id = get_mesh_storage_instance(mesh_instance);
+	ERR_FAIL_COND_V(!mesh_storage_instance_id.is_valid(), nullptr);
+
+	return get_mesh_vertex_data(mesh_storage_instance_id);
+}
+
+TriangleRaySelect::mesh_storage_t::Mesh *TriangleRaySelect::get_mesh_vertex_data(RID mesh_storage_instance_id)
+{
+	// Check that mesh_id is really owned by mesh_storage
+	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
+	auto &mesh_owner             = mesh_storage.mesh_owner;
+	assert(mesh_owner.owns(mesh_storage_instance_id));
+
+	return mesh_owner.get_or_null(mesh_storage_instance_id);
 }
