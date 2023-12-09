@@ -67,16 +67,16 @@ TriangleRaySelect::~TriangleRaySelect()
 
 	for(auto &surface_rid: this->_instance_surface_uniform_set)
 	{
-		prd->free(surface_rid.second.SurfaceUniformSet);
-		prd->free(surface_rid.second.IndexStorageBuffer);
+		prd->free(surface_rid.second.surface_uniform_set);
+		prd->free(surface_rid.second.index_storage_buffer);
 	}
 	this->_instance_surface_uniform_set.clear();
 
 	for(auto &surface_rid: this->_mesh_surface_uniform_set)
 	{
-		prd->free(surface_rid.second.SurfaceUniformSet);
-		prd->free(surface_rid.second.IndexStorageBuffer);
-		prd->free(surface_rid.second.VertexStorageBuffer);
+		prd->free(surface_rid.second.surface_uniform_set);
+		prd->free(surface_rid.second.index_storage_buffer);
+		prd->free(surface_rid.second.vertex_storage_buffer);
 	}
 	this->_mesh_surface_uniform_set.clear();
 
@@ -213,13 +213,13 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 
 	// Ray parameters
 	TriangleRaySelectShader::Params params{};
-	params.RayOrigin[0] = ray_origin[0];
-	params.RayOrigin[1] = ray_origin[1];
-	params.RayOrigin[2] = ray_origin[2];
+	params.ray_origin[0] = ray_origin[0];
+	params.ray_origin[1] = ray_origin[1];
+	params.ray_origin[2] = ray_origin[2];
 
-	params.RayNormal[0] = ray_normal[0];
-	params.RayNormal[1] = ray_normal[1];
-	params.RayNormal[2] = ray_normal[2];
+	params.ray_normal[0] = ray_normal[0];
+	params.ray_normal[1] = ray_normal[1];
+	params.ray_normal[2] = ray_normal[2];
 
 	RenderingDevice *const prd   = RD::get_singleton();
 	mesh_storage_t &mesh_storage = *mesh_storage_t::get_singleton();
@@ -276,20 +276,20 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 		// Prepare compute shader
 		RD::ComputeListID compute_list_id = RD::get_singleton()->compute_list_begin();
 
-		prd->compute_list_bind_uniform_set(compute_list_id, psurface_data->SurfaceUniformSet, 0);
+		prd->compute_list_bind_uniform_set(compute_list_id, psurface_data->surface_uniform_set, 0);
 		prd->compute_list_bind_uniform_set(compute_list_id, this->_selected_vertex_uniform_set, 1);
 
 		prd->compute_list_bind_compute_pipeline(compute_list_id, this->_triangle_ray_select_shader.pipeline);
 
 		// Set compute shader params
-		params.IndexCount   = psurface_data->IndexCount;
-		params.IndexStride  = psurface_data->IndexStride;
-		params.VertexStride = psurface_data->VertexStride;
+		params.index_count   = psurface_data->index_count;
+		params.index_stride  = psurface_data->index_stride;
+		params.vertex_stride = psurface_data->vertex_stride;
 
 		prd->compute_list_set_push_constant(compute_list_id, &params, sizeof(TriangleRaySelectShader::Params));
 
 		// Run compute shader
-		const uint32_t num_triangles = params.IndexStride == 3 ? params.IndexCount / 3 : params.IndexCount / 2 + 1;
+		const uint32_t num_triangles = params.index_stride == 3 ? params.index_count / 3 : params.index_count / 2 + 1;
 		prd->compute_list_dispatch_threads(compute_list_id, num_triangles, 1, 1);
 
 		// Wait for compute shader finish
@@ -330,15 +330,16 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 	const mesh_storage_t::Mesh::Surface *const pmesh_surface    = mesh_instance_data->mesh->surfaces[surface_id];
 
 	SurfaceData surface_data;
-	surface_data.IndexStorageBuffer = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+	surface_data.index_storage_buffer =
+		generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
 
 	// From mesh_storage.cpp
 	const bool has_normal               = pmesh_surface->format & RS::ARRAY_FORMAT_NORMAL;
 	const bool has_tangent              = pmesh_surface->format & RS::ARRAY_FORMAT_TANGENT;
 	const uint8_t normal_tangent_stride = (has_normal ? 1 : 0) + (has_tangent ? 1 : 0);
 
-	surface_data.VertexStorageBuffer = psurface->vertex_buffer[psurface->current_buffer];
-	surface_data.VertexStride =
+	surface_data.vertex_storage_buffer = psurface->vertex_buffer[psurface->current_buffer];
+	surface_data.vertex_stride =
 		(pmesh_surface->vertex_buffer_size / pmesh_surface->vertex_count) / 4 - normal_tangent_stride;
 
 	Vector<RD::Uniform> uniforms;
@@ -346,7 +347,7 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 		RD::Uniform u;
 		u.binding      = 0;
 		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
-		u.append_id(surface_data.IndexStorageBuffer);
+		u.append_id(surface_data.index_storage_buffer);
 		uniforms.push_back(u);
 	}
 
@@ -354,17 +355,17 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_instance_surface_d
 		RD::Uniform u;
 		u.binding      = 1;
 		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
-		u.append_id(surface_data.VertexStorageBuffer);
+		u.append_id(surface_data.vertex_storage_buffer);
 		uniforms.push_back(u);
 	}
 
-	surface_data.IndexCount = pmesh_surface->index_count;
+	surface_data.index_count = pmesh_surface->index_count;
 
 	assert(pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ||
 	       pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLE_STRIP);
-	surface_data.IndexStride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
+	surface_data.index_stride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
 
-	surface_data.SurfaceUniformSet =
+	surface_data.surface_uniform_set =
 		RD::get_singleton()->uniform_set_create(uniforms, this->_triangle_ray_select_shader.shader_version, 0);
 
 	return surface_data;
@@ -378,8 +379,9 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 	const mesh_storage_t::Mesh::Surface *const pmesh_surface = mesh_data->surfaces[surface_id];
 
 	SurfaceData surface_data;
-	surface_data.IndexStorageBuffer = generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
-	std::tie(surface_data.VertexStorageBuffer, surface_data.VertexStride) =
+	surface_data.index_storage_buffer =
+		generate_index_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
+	std::tie(surface_data.vertex_storage_buffer, surface_data.vertex_stride) =
 		generate_vertex_array_storage_buffer(*mesh_instance.get_mesh().ptr(), surface_id);
 
 	Vector<RD::Uniform> uniforms;
@@ -387,7 +389,7 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 		RD::Uniform u;
 		u.binding      = 0;
 		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
-		u.append_id(surface_data.IndexStorageBuffer);
+		u.append_id(surface_data.index_storage_buffer);
 		uniforms.push_back(u);
 	}
 
@@ -395,17 +397,17 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 		RD::Uniform u;
 		u.binding      = 1;
 		u.uniform_type = RD::UNIFORM_TYPE_STORAGE_BUFFER;
-		u.append_id(surface_data.VertexStorageBuffer);
+		u.append_id(surface_data.vertex_storage_buffer);
 		uniforms.push_back(u);
 	}
 
-	surface_data.IndexCount = pmesh_surface->index_count;
+	surface_data.index_count = pmesh_surface->index_count;
 
 	assert(pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ||
 	       pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLE_STRIP);
-	surface_data.IndexStride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
+	surface_data.index_stride = pmesh_surface->primitive == RenderingServer::PRIMITIVE_TRIANGLES ? 3 : 2;
 
-	surface_data.SurfaceUniformSet =
+	surface_data.surface_uniform_set =
 		RD::get_singleton()->uniform_set_create(uniforms, this->_triangle_ray_select_shader.shader_version, 0);
 
 	return surface_data;
@@ -453,8 +455,8 @@ PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshTriang
 	{
 		const int32_t vector_index = mesh_triangle_point->vertex_ids[i];
 		const Vector<uint8_t> vector_buffer =
-			prd->buffer_get_data(psurf_data->VertexStorageBuffer,
-		                         vector_index * psurf_data->VertexStride * sizeof(float), 3 * sizeof(float));
+			prd->buffer_get_data(psurf_data->vertex_storage_buffer,
+		                         vector_index * psurf_data->vertex_stride * sizeof(float), 3 * sizeof(float));
 		ret.write[i][0] = *(const float *)(vector_buffer.ptr() + 0 * sizeof(float));
 		ret.write[i][1] = *(const float *)(vector_buffer.ptr() + 1 * sizeof(float));
 		ret.write[i][2] = *(const float *)(vector_buffer.ptr() + 2 * sizeof(float));

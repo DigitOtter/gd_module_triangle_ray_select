@@ -21,14 +21,14 @@ class TriangleRaySelect : public RefCounted
 
 	struct SurfaceData
 	{
-		uint32_t IndexCount = 0;
+		uint32_t index_count = 0;
 
-		uint8_t IndexStride  = 0;
-		uint8_t VertexStride = 0;
+		uint8_t index_stride  = 0;
+		uint8_t vertex_stride = 0;
 
-		RID IndexStorageBuffer  = RID();
-		RID VertexStorageBuffer = RID();
-		RID SurfaceUniformSet   = RID();
+		RID index_storage_buffer  = RID();
+		RID vertex_storage_buffer = RID();
+		RID surface_uniform_set   = RID();
 	};
 
 	struct TriangleRaySelectShader
@@ -47,15 +47,15 @@ class TriangleRaySelect : public RefCounted
 
 		struct Params
 		{
-			uint32_t IndexCount;
-			uint32_t IndexStride;
-			uint32_t VertexStride;
+			uint32_t index_count;
+			uint32_t index_stride;
+			uint32_t vertex_stride;
 			uint32_t pad_0;
 
-			float RayOrigin[3];
+			float ray_origin[3];
 			uint32_t pad_1;
 
-			float RayNormal[3];
+			float ray_normal[3];
 			uint32_t pad_2;
 		};
 
