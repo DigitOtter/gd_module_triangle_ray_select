@@ -17,6 +17,8 @@ Note:
 
 ## Usage
 
+An example project is available at [https://github.com/DigitOtter/gd_triangle_ray_select_example](https://github.com/DigitOtter/gd_triangle_ray_select_example).
+
 TriangleRaySelect example to get the triangle at mouse position on click:
 ``` gdscript
 extends Node
@@ -43,7 +45,7 @@ func _input(event):
 ```
 
 TriangleTransform example to locate the global pose of a selected triangle:
-``` godot
+``` gdscript
 extends Node
 
 var triangle_ray_select: TriangleRaySelect = null
