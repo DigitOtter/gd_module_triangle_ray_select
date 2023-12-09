@@ -19,6 +19,8 @@ Note:
 
 An example project is available at [https://github.com/DigitOtter/gd_triangle_ray_select_example](https://github.com/DigitOtter/gd_triangle_ray_select_example).
 
+https://github.com/DigitOtter/gd_triangle_ray_select_example/assets/102542997/ff05f6cc-ca81-4dab-b132-58879b1b54c2
+
 TriangleRaySelect example to get the triangle at mouse position on click:
 ``` gdscript
 extends Node
