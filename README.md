@@ -1,4 +1,4 @@
-# gd\_module\_triangle\_ray\_select
+# Godot module to select mesh triangle from ray
 
 Triangle selection from ray. `TriangleRaySelect` takes an array of `MeshInstance3D`'s and a ray origin and normal to select the triangle that's closest to the ray's origin. The class checks the mesh's vertice positions after skeleton and blend shape transforms have been applied, so we can use up-to-date information for triangle selection.
 

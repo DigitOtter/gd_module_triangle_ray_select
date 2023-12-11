@@ -1,6 +1,5 @@
 #include "triangle_ray_select.h"
 
-#include "core/math/transform_3d.h"
 #include "register_vk_extensions.h"
 
 #include <servers/rendering/renderer_geometry_instance.h>
