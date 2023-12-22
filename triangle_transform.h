@@ -29,6 +29,11 @@ class TriangleTransform : public RefCounted
 	static Vector3 compute_coord_lengths(const Vector3 &vert0, const Vector3 &vert1, const Vector3 &vert2,
 	                                     const Transform3D &point_tf);
 
+	inline constexpr const Basis &get_original_rotation() const
+	{
+		return this->original_rotation;
+	}
+
 	protected:
 	static void _bind_methods();
 

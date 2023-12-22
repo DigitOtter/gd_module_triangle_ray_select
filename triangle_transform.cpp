@@ -133,6 +133,8 @@ void TriangleTransform::_bind_methods()
 	ClassDB::bind_method(D_METHOD("set_coord_lengths", "coord_lengths"), &TriangleTransform::set_coord_lengths);
 	ClassDB::add_property("TriangleTransform", PropertyInfo(Variant::Type::VECTOR3, "coord_lengths"),
 	                      "set_coord_lengths", "get_coord_lengths");
+
+	ClassDB::bind_method(D_METHOD("get_original_rotation"), &TriangleTransform::get_original_rotation);
 }
 
 Vector3 TriangleTransform::compute_coord_lengths_from_system(const Vector3 &dir1, const Vector3 &dir2,
@@ -163,5 +165,5 @@ Vector3 TriangleTransform::compute_rel_point_from_system(const Vector3 &dir1_adj
 
 Basis TriangleTransform::compute_normal_rotation(const Vector3 &normal, const Vector3 &dir1)
 {
-	return Basis::looking_at(normal, dir1) * this->original_rotation.inverse();
+	return Basis::looking_at(normal, dir1); //*this->original_rotation.inverse();
 }
