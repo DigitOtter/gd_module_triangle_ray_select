@@ -414,7 +414,8 @@ TriangleRaySelect::SurfaceData TriangleRaySelect::create_mesh_surface_data(const
 
 PackedVector3Array TriangleRaySelect::get_triangle_vertices(const Ref<MeshTrianglePoint> &mesh_triangle_point)
 {
-	ERR_FAIL_COND_V(mesh_triangle_point.is_null(), PackedVector3Array());
+	if(unlikely(mesh_triangle_point.is_null() || mesh_triangle_point->mesh_instance == nullptr))
+		return PackedVector3Array();
 
 	const SurfaceData *psurf_data;
 	if(mesh_storage_t::get_singleton()->mesh_needs_instance(
