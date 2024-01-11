@@ -125,8 +125,7 @@ void TriangleRaySelect::_bind_methods()
 	}
 
 	{
-		using sel_tri_fcn_t =
-			Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, const Vector3 &, const Vector3 &);
+		using sel_tri_fcn_t = Ref<MeshTrianglePoint> (TriangleRaySelect::*)(MeshInstance3D *, Vector3, Vector3);
 		ClassDB::bind_method(D_METHOD("select_triangle_from_mesh", "mesh_instance", "ray_origin", "ray_normal"),
 		                     (sel_tri_fcn_t)&TriangleRaySelect::select_triangle_from_mesh);
 	}
@@ -154,7 +153,7 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Arra
                                                                       const Camera3D *camera, const Point2i &pixel)
 {
 	return this->select_triangle_from_meshes(mesh_instances, camera->project_ray_origin(pixel),
-	                                         camera->project_local_ray_normal(pixel));
+	                                         camera->project_ray_normal(pixel));
 }
 
 Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Array &mesh_instances,
@@ -170,10 +169,7 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_meshes(const Arra
 		                 "Array contains an item that is not a MeshInstance3D");
 
 		MeshInstance3D *mesh_instance = static_cast<MeshInstance3D *>(o);
-		const Transform3D &global_tf  = mesh_instance->get_global_transform();
-
-		Ref<MeshTrianglePoint> cur_res = this->select_triangle_from_mesh(mesh_instance, global_tf.xform_inv(ray_origin),
-		                                                                 global_tf.basis.xform_inv(ray_normal));
+		Ref<MeshTrianglePoint> cur_res = this->select_triangle_from_mesh(mesh_instance, ray_origin, ray_normal);
 
 		if(cur_res->ray_origin_dist < ret->ray_origin_dist)
 		{
@@ -191,11 +187,14 @@ Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance
 	                                       camera->project_ray_normal(pixel));
 }
 
-Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance,
-                                                                    const Vector3 &ray_origin,
-                                                                    const Vector3 &ray_normal)
+Ref<MeshTrianglePoint> TriangleRaySelect::select_triangle_from_mesh(MeshInstance3D *mesh_instance, Vector3 ray_origin,
+                                                                    Vector3 ray_normal)
 {
 	ERR_FAIL_COND_V(mesh_instance == nullptr, Ref(new MeshTrianglePoint()));
+
+	const Transform3D &mesh_tf = mesh_instance->get_global_transform();
+	ray_origin                 = mesh_tf.xform_inv(ray_origin);
+	ray_normal                 = mesh_tf.basis.xform_inv(ray_normal);
 
 	RID mesh_rid = get_mesh_storage_instance(mesh_instance);
 	ERR_FAIL_COND_V(mesh_rid.is_null(), Ref(new MeshTrianglePoint()));

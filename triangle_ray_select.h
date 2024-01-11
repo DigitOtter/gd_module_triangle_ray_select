@@ -85,8 +85,8 @@ class TriangleRaySelect : public RefCounted
 
 	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Camera3D *camera,
 	                                                 const Point2i &pixel);
-	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, const Vector3 &ray_origin,
-	                                                 const Vector3 &ray_normal);
+	Ref<MeshTrianglePoint> select_triangle_from_mesh(MeshInstance3D *mesh_instance, Vector3 ray_origin,
+	                                                 Vector3 ray_normal);
 
 	SurfaceData create_mesh_instance_surface_data(const MeshInstance3D &mesh_instance, size_t surface_id,
 	                                              mesh_storage_t::MeshInstance *mesh_instance_data) const;
